@@ -1,7 +1,5 @@
 package fr.imt.projet;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +31,7 @@ class MatchTest {
         assertSame(equipe2, match.getVainqueur());
         assertEquals(0, equipe1.getNombreDePoints());
         assertEquals(3, equipe2.getNombreDePoints());
+        assertEquals(1, equipe2.getCoach().getTotalVictoiresEnCarriere());
     }
 
     @Test
@@ -70,8 +69,8 @@ class MatchTest {
     }
 
     private static Equipe creerEquipe(String nom) {
-        Coach coach = new Coach(1, "Coach", "Prenom", "pseudo", "genre", "telephone", nom);
-        return new Equipe(nom, coach, List.of(), 0);
+        Coach coach = new Coach(1, "Coach", "Prenom", "pseudo", "genre", "telephone");
+        return new Equipe(nom, coach);
     }
 
     private static Arbitre creerArbitre(String jeu) {

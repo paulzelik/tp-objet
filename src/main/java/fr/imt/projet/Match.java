@@ -2,14 +2,21 @@ package fr.imt.projet;
 
 import java.util.Objects;
 
+/**
+ * Match entre deux équipes différentes sur un jeu, sous le contrôle d'un arbitre qualifié.
+ * Il garde la trace des deux équipes, de l'arbitre et du vainqueur. Ses transitions sont
+ * package-private : elles passent par le {@link Tournoi}, qui contrôle les arènes.
+ */
 public class Match {
-    private static final int POINTS_PAR_VICTOIRE = 3;
-
     public enum Statut {
         PLANIFIE,
         EN_COURS,
         JOUE,
-        INCIDENT_TECHNIQUE
+        INCIDENT_TECHNIQUE;
+
+        public boolean estTermine() {
+            return this == JOUE || this == INCIDENT_TECHNIQUE;
+        }
     }
 
     private final Equipe equipe1;
@@ -53,6 +60,10 @@ public class Match {
         return statut;
     }
 
+    public boolean oppose(Equipe equipe) {
+        return equipe == equipe1 || equipe == equipe2;
+    }
+
     synchronized void demarrer() {
         if (statut != Statut.PLANIFIE) {
             throw new IllegalStateException("Le match n'est pas planifié");
@@ -66,15 +77,10 @@ public class Match {
         if (statut != Statut.EN_COURS) {
             throw new IllegalStateException("Le match doit être en cours pour déclarer son vainqueur");
         }
-        if (vainqueur != equipe1 && vainqueur != equipe2) {
+        if (!oppose(vainqueur)) {
             throw new IllegalArgumentException("Le vainqueur doit être l'une des équipes du match");
         }
-
-        vainqueur.ajouterPoints(POINTS_PAR_VICTOIRE);
-        vainqueur.getCoach().enregistrerVictoireEquipe();
-        for (Joueur joueur : vainqueur.getJoueurs()) {
-            joueur.enregistrerVictoireEquipe();
-        }
+        vainqueur.enregistrerVictoire();
         this.vainqueur = vainqueur;
         statut = Statut.JOUE;
     }
@@ -84,5 +90,16 @@ public class Match {
             throw new IllegalStateException("Le match doit être en cours pour signaler un incident");
         }
         statut = Statut.INCIDENT_TECHNIQUE;
+    }
+
+    @Override
+    public synchronized String toString() {
+        String resultat = switch (statut) {
+            case JOUE -> "victoire de " + vainqueur.getNom();
+            case INCIDENT_TECHNIQUE -> "annulé (incident technique)";
+            case EN_COURS -> "en cours";
+            case PLANIFIE -> "planifié";
+        };
+        return equipe1.getNom() + " vs " + equipe2.getNom() + " [" + arbitre.getPseudo() + "] → " + resultat;
     }
 }
