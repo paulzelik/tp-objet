@@ -52,7 +52,7 @@ class TournoiTest {
         assertEquals(Tournoi.Statut.TERMINE, tournoi.getStatut());
         assertEquals(9, equipes.get(0).getNombreDePoints());
         assertEquals(3, equipes.get(0).getCoach().getTotalVictoiresEnCarriere());
-        assertEquals(Joueur.Statut.PRO, equipes.get(0).getJoueurs()[0].getStatut());
+        assertEquals(Joueur.Statut.PRO, equipes.get(0).getJoueurs().get(0).getStatut());
         assertEquals(6, arbitre.getMatchsArbitres());
         assertEquals("Coupe", tournoi.getRapport().getNom());
         assertEquals("Tennis", tournoi.getRapport().getJeu());
@@ -292,7 +292,7 @@ class TournoiTest {
         Coach coach = new Coach(1, "Coach " + nom, "Prenom", "pseudo", "genre", "telephone", nom);
         Joueur joueur = new Joueur(
                 1, "Joueur " + nom, "Prenom", "pseudo", "genre", "telephone", nom, Joueur.Statut.AMATEUR);
-        return new Equipe(nom, coach, new Joueur[] {joueur}, 0);
+        return new Equipe(nom, coach, List.of(joueur), 0);
     }
 
     private static Arbitre inscrireArbitre(Tournoi tournoi, Jeux jeu) {

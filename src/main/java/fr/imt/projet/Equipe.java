@@ -1,14 +1,16 @@
 package fr.imt.projet;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public class Equipe {
     private String nom;
     private Coach coach;
-    private Joueur[] joueurs;
+    private List<Joueur> joueurs;
     private int nombreDePoints;
 
-    public Equipe(String nom, Coach coach, Joueur[] joueurs, int nombreDePoints) {
+    public Equipe(String nom, Coach coach, List<Joueur> joueurs, int nombreDePoints) {
         setNom(nom);
         setCoach(coach);
         setJoueurs(joueurs);
@@ -35,12 +37,12 @@ public class Equipe {
         this.coach = Objects.requireNonNull(coach, "coach ne peut pas être null");
     }
 
-    public Joueur[] getJoueurs() {
-        return joueurs.clone();
+    public List<Joueur> getJoueurs() {
+        return new ArrayList<>(joueurs);
     }
 
-    public void setJoueurs(Joueur[] joueurs) {
-        Joueur[] copie = Objects.requireNonNull(joueurs, "joueurs ne peut pas être null").clone();
+    public void setJoueurs(List<Joueur> joueurs) {
+        List<Joueur> copie = new ArrayList<>(Objects.requireNonNull(joueurs, "joueurs ne peut pas être null"));
         for (Joueur joueur : copie) {
             Objects.requireNonNull(joueur, "un joueur ne peut pas être null");
         }

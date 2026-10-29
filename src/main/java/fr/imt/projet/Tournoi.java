@@ -167,8 +167,8 @@ public class Tournoi {
             if (equipe.getCoach() == null) {
                 throw new IllegalStateException("Chaque équipe doit avoir un coach");
             }
-            Joueur[] joueurs = equipe.getJoueurs();
-            if (joueurs.length != jeu.getNombreJoueursParEquipe()) {
+            List<Joueur> joueurs = equipe.getJoueurs();
+            if (joueurs.size() != jeu.getNombreJoueursParEquipe()) {
                 throw new IllegalStateException(
                         "Chaque équipe doit avoir exactement " + jeu.getNombreJoueursParEquipe() + " joueurs");
             }
@@ -270,7 +270,7 @@ public class Tournoi {
         }
     }
 
-    private static boolean contientIdentite(Joueur[] joueurs, Joueur[] autresJoueurs) {
+    private static boolean contientIdentite(List<Joueur> joueurs, List<Joueur> autresJoueurs) {
         for (Joueur joueur : joueurs) {
             for (Joueur autreJoueur : autresJoueurs) {
                 if (joueur == autreJoueur) {
