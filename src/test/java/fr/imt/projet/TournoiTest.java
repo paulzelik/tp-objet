@@ -1,5 +1,9 @@
 package fr.imt.projet;
 
+import fr.imt.projet.jeux.*;
+import fr.imt.projet.personnes.*;
+import fr.imt.projet.rapports.RapportTournoi;
+import fr.imt.projet.tournois.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -12,6 +16,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,6 +26,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TournoiTest {
+    private GestionnaireTournois gestionnaire;
+
+    @AfterEach
+    void fermerGestionnaire() {
+        if (gestionnaire != null) {
+            gestionnaire.close();
+        }
+    }
+
     @Test
     void createsRoundRobinScheduleAndAutomaticallyProducesSuccessfulReport() {
         Jeux jeu = new JeuxSolo("Tennis", 3);
@@ -28,7 +42,7 @@ class TournoiTest {
         List<Equipe> equipes = inscrireQuatreEquipes(tournoi);
         Arbitre arbitre = inscrireArbitre(tournoi, jeu);
 
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         gestionnaire.ajouterTournoi(tournoi);
         assertSame(tournoi, gestionnaire.lancerProchainTournoi());
         assertEquals(Tournoi.Statut.EN_COURS, tournoi.getStatut());
@@ -60,7 +74,7 @@ class TournoiTest {
         Tournoi tournoi = creerTournoi("Coupe", jeu, LocalDate.of(2026, 11, 1), 4);
         List<Equipe> equipes = inscrireQuatreEquipes(tournoi);
         inscrireArbitre(tournoi, jeu);
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         gestionnaire.ajouterTournoi(tournoi);
         gestionnaire.lancerProchainTournoi();
 
@@ -86,7 +100,7 @@ class TournoiTest {
         Tournoi tournoi = creerTournoi("Coupe", jeu, LocalDate.of(2026, 11, 1), 4);
         List<Equipe> equipes = inscrireQuatreEquipes(tournoi);
         inscrireArbitre(tournoi, jeu);
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         gestionnaire.ajouterTournoi(tournoi);
         gestionnaire.lancerProchainTournoi();
 
@@ -110,7 +124,7 @@ class TournoiTest {
     @Test
     void startsTheNearestTournamentAndLimitsConcurrentTournamentsToThree() {
         Jeux jeu = new JeuxSolo("Tennis", 3);
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         Tournoi plusTard = tournoiValide("Plus tard", jeu, LocalDate.of(2026, 12, 1));
         Tournoi lePlusProche = tournoiValide("Le plus proche", jeu, LocalDate.of(2026, 11, 1));
         Tournoi troisieme = tournoiValide("Troisième", jeu, LocalDate.of(2026, 11, 2));
@@ -135,7 +149,7 @@ class TournoiTest {
         inscrireEquipe(premier, equipePartagee);
         Tournoi second = tournoiValide("Second", jeu, LocalDate.of(2026, 11, 2));
         inscrireEquipe(second, equipePartagee);
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         gestionnaire.ajouterTournoi(premier);
         gestionnaire.ajouterTournoi(second);
 
@@ -150,7 +164,7 @@ class TournoiTest {
         Tournoi tournoi = creerTournoi("Coupe", jeu, LocalDate.of(2026, 11, 1), 1);
         tournoi.inscrireEquipe(creerEquipe("Equipe 1"));
         inscrireArbitre(tournoi, jeu);
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         gestionnaire.ajouterTournoi(tournoi);
 
         assertThrows(IllegalStateException.class, gestionnaire::lancerProchainTournoi);
@@ -166,7 +180,7 @@ class TournoiTest {
         Tournoi tournoi = creerTournoi("Coupe", jeu, LocalDate.of(2026, 11, 1), 2);
         inscrireQuatreEquipes(tournoi);
         inscrireArbitre(tournoi, jeu);
-        GestionnaireTournois gestionnaire = new GestionnaireTournois();
+        gestionnaire = new GestionnaireTournois();
         gestionnaire.ajouterTournoi(tournoi);
 
         assertThrows(IllegalStateException.class, gestionnaire::lancerProchainTournoi);

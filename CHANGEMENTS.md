@@ -1,7 +1,9 @@
 # Ce qui a changé par rapport à notre version
 
-Le point de départ est notre dépôt `tp-objet` : même paquet `fr.imt.projet`, mêmes classes, mêmes
-noms de méthodes. Ce document liste **tout** ce qui a été modifié ou ajouté, et pourquoi.
+Le point de départ est notre dépôt `tp-objet` : mêmes classes et mêmes noms de méthodes. Les
+hiérarchies de personnes et de jeux sont maintenant regroupées dans les packages dédiés
+`fr.imt.projet.personnes` et `fr.imt.projet.jeux`. Ce document liste **tout** ce qui a été modifié
+ou ajouté, et pourquoi.
 
 Il y a 58 tests au total (contre 23 avant), tous réussis.
 

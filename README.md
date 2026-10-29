@@ -2,7 +2,9 @@
 
 Projet Java qui modélise les personnes, les équipes, les matchs et les tournois d'une compétition
 e-sport. Il simule les tournois en arrière-plan et archive leurs rapports dans une base H2.
-Les règles métier sont portées par les classes du package `fr.imt.projet`.
+Les personnes et leurs capacités sont regroupées dans `fr.imt.projet.personnes`, tandis que les
+jeux et leurs variantes sont dans `fr.imt.projet.jeux`. Les autres classes métier restent dans
+`fr.imt.projet`.
 
 La liste détaillée des améliorations apportées à la première version se trouve dans
 [CHANGEMENTS.md](CHANGEMENTS.md).
@@ -67,6 +69,9 @@ mvn -Dtest=TournoiTest test
 l'existant.
 
 ### Équipes, matchs et tournois
+
+Les classes de calendrier, matchs, stratégie de victoire et simulation sont regroupées dans `fr.imt.projet.tournois`.
+Les entités et dépôts de rapports se trouvent dans `fr.imt.projet.rapports`.
 
 - `Equipe` : un nom, un coach, des joueurs et des points (3 par victoire). Sa composition est gelée
   pendant un tournoi.

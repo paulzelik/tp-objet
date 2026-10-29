@@ -1,5 +1,7 @@
 package fr.imt.projet;
 
+import fr.imt.projet.jeux.*;
+import fr.imt.projet.personnes.*;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,7 @@
 package fr.imt.projet;
 
+import fr.imt.projet.jeux.*;
+import fr.imt.projet.personnes.Personne;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;

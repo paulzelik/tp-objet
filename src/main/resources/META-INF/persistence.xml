@@ -7,7 +7,7 @@
     <!-- Seuls les rapports de tournoi sont persistés -->
     <persistence-unit name="imt-arena" transaction-type="RESOURCE_LOCAL">
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
-        <class>fr.imt.projet.RapportTournoi</class>
+        <class>fr.imt.projet.rapports.RapportTournoi</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
 
         <properties>

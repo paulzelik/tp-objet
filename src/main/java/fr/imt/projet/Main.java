@@ -1,5 +1,9 @@
 package fr.imt.projet;
 
+import fr.imt.projet.jeux.*;
+import fr.imt.projet.personnes.*;
+import fr.imt.projet.rapports.*;
+import fr.imt.projet.tournois.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDate;

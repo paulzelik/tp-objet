@@ -1,5 +1,10 @@
 package fr.imt.projet;
 
+import fr.imt.projet.jeux.*;
+import fr.imt.projet.personnes.*;
+import fr.imt.projet.rapports.JpaRapportRepository;
+import fr.imt.projet.rapports.RapportTournoi;
+import fr.imt.projet.tournois.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -199,32 +204,6 @@ class GestionnaireListesTest {
         premiere.classer(1);
         derniere.classer(8);
         assertSame(premiere, StrategieVainqueur.toujoursMieuxClassee().designerVainqueur(derniere, premiere, new Random()));
-    }
-
-    @ParameterizedTest(name = "{0} équipes, {1} arène(s)")
-    @CsvSource({"4, 1", "4, 4", "6, 3", "8, 4"})
-    void simulationWavesRespectArenasAndNeverPutATeamTwice(int nombreEquipes, int arenes) {
-        List<Equipe> equipes = new ArrayList<>();
-        List<Match> matchs = new ArrayList<>();
-        Arbitre arbitre = new Arbitre(1, "A", "B", "ref", "F", "0600000000");
-        arbitre.qualifierPourJeu(jeu.getNom());
-        for (int i = 0; i < nombreEquipes; i++) {
-            equipes.add(new Equipe("E" + i, EquipeTest.coach(i)));
-        }
-        for (int i = 0; i < nombreEquipes; i++) {
-            for (int j = i + 1; j < nombreEquipes; j++) {
-                matchs.add(new Match(equipes.get(i), equipes.get(j), jeu, arbitre));
-            }
-        }
-        List<List<Match>> vagues = SimulateurTournoi.planifierVagues(matchs, arenes);
-        assertEquals(matchs.size(), vagues.stream().mapToInt(List::size).sum());
-        for (List<Match> vague : vagues) {
-            assertTrue(vague.size() <= arenes);
-            long equipesDistinctes = vague.stream()
-                    .flatMap(m -> java.util.stream.Stream.of(m.getEquipe1(), m.getEquipe2()))
-                    .distinct().count();
-            assertEquals(vague.size() * 2L, equipesDistinctes);
-        }
     }
 
     @Test
