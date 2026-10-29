@@ -1,32 +1,48 @@
 package fr.imt.projet.tournoi;
 
+import fr.imt.projet.exceptions.RegleMetierException;
+import fr.imt.projet.rapports.RapportTournoi;
+import fr.imt.projet.tournoi.strategie.FavoriseMieuxClasse;
+import fr.imt.projet.tournoi.strategie.StrategieVainqueur;
+
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.PriorityQueue;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-
-import fr.imt.projet.rapports.RapportTournoi;
 
 public class GestionnaireTournois implements AutoCloseable {
     private static final int MAX_TOURNOIS_EN_COURS = 3;
 
-    private final List<Tournoi> tournois = new ArrayList<>();
+    private final PriorityQueue<Tournoi> fileTournois = new PriorityQueue<>();
+    private final List<Tournoi> tousLesTournois = new ArrayList<>();
     private final ExecutorService executor = Executors.newFixedThreadPool(MAX_TOURNOIS_EN_COURS);
+    private final Semaphore semaphore = new Semaphore(MAX_TOURNOIS_EN_COURS);
     private final long tempsParMatchMillis;
     private final double probabiliteIncident;
     private final long graine;
+    private final StrategieVainqueur strategieVainqueur;
     private boolean ferme;
     private long numeroSimulation;
 
     public GestionnaireTournois() {
-        this(100, 0.10, System.nanoTime());
+        this(100, 0.10, System.nanoTime(), new FavoriseMieuxClasse());
     }
 
     public GestionnaireTournois(long tempsParMatchMillis, double probabiliteIncident, long graine) {
+        this(tempsParMatchMillis, probabiliteIncident, graine, new FavoriseMieuxClasse());
+    }
+
+    public GestionnaireTournois(
+            long tempsParMatchMillis,
+            double probabiliteIncident,
+            long graine,
+            StrategieVainqueur strategieVainqueur) {
         if (tempsParMatchMillis < 0) {
             throw new IllegalArgumentException("Le temps par match ne peut pas être négatif");
         }
@@ -36,58 +52,80 @@ public class GestionnaireTournois implements AutoCloseable {
         this.tempsParMatchMillis = tempsParMatchMillis;
         this.probabiliteIncident = probabiliteIncident;
         this.graine = graine;
+        this.strategieVainqueur = Objects.requireNonNull(strategieVainqueur, "strategieVainqueur ne peut pas être null");
     }
 
     public synchronized List<Tournoi> getTournois() {
-        return List.copyOf(tournois);
+        return List.copyOf(tousLesTournois);
+    }
+
+    public synchronized List<Tournoi> getTournoisPlanifiesTries() {
+        return fileTournois.stream().sorted().toList();
     }
 
     public synchronized void ajouterTournoi(Tournoi tournoi) {
         verifierOuvert();
         Objects.requireNonNull(tournoi, "tournoi ne peut pas être null");
-        if (tournois.contains(tournoi)) {
-            throw new IllegalArgumentException("Le tournoi est déjà enregistré");
+        if (tousLesTournois.contains(tournoi)) {
+            throw new RegleMetierException("Le tournoi est déjà enregistré");
         }
-        tournois.add(tournoi);
+        tousLesTournois.add(tournoi);
+        if (tournoi.getStatut() == Tournoi.Statut.PLANIFIE) {
+            fileTournois.add(tournoi);
+        }
     }
 
     public synchronized Tournoi lancerProchainTournoi() {
         verifierOuvert();
-        verifierCapacite();
-        Tournoi prochain = prochainTournoi();
-        verifierAbsenceDeConflit(prochain);
-        prochain.demarrer();
-        return prochain;
+        if (!semaphore.tryAcquire()) {
+            throw new IllegalStateException("Trois tournois sont déjà en cours");
+        }
+        try {
+            Tournoi prochain = fileTournois.poll();
+            if (prochain == null) {
+                throw new IllegalStateException("Aucun tournoi n'est planifié");
+            }
+            verifierAbsenceDeConflit(prochain);
+            prochain.demarrer();
+            return prochain;
+        } catch (Throwable t) {
+            semaphore.release();
+            throw t;
+        }
     }
 
     public synchronized Future<RapportTournoi> simulerProchainTournoi() {
         verifierOuvert();
-        verifierCapacite();
-        Tournoi prochain = prochainTournoi();
-        verifierAbsenceDeConflit(prochain);
-        prochain.demarrer();
-        return executor.submit(new SimulateurTournoi(
-                prochain, tempsParMatchMillis, probabiliteIncident, graine + numeroSimulation++));
-    }
-
-    private void verifierCapacite() {
-        long tournoisEnCours = tournois.stream()
-                .filter(t -> t.getStatut() == Tournoi.Statut.EN_COURS)
-                .count();
-        if (tournoisEnCours >= MAX_TOURNOIS_EN_COURS) {
+        if (!semaphore.tryAcquire()) {
             throw new IllegalStateException("Trois tournois sont déjà en cours");
         }
-    }
+        Tournoi prochain;
+        try {
+            prochain = fileTournois.poll();
+            if (prochain == null) {
+                throw new IllegalStateException("Aucun tournoi n'est planifié");
+            }
+            verifierAbsenceDeConflit(prochain);
+            prochain.demarrer();
+        } catch (Throwable t) {
+            semaphore.release();
+            throw t;
+        }
 
-    private Tournoi prochainTournoi() {
-        return tournois.stream()
-                .filter(t -> t.getStatut() == Tournoi.Statut.PLANIFIE)
-                .min(Comparator.comparing(Tournoi::getDate))
-                .orElseThrow(() -> new IllegalStateException("Aucun tournoi n'est planifié"));
+        Random random = new Random(graine + numeroSimulation++);
+        return executor.submit(() -> {
+            try {
+                SimulateurTournoi simulateur = new SimulateurTournoi(
+                        prochain, tempsParMatchMillis, probabiliteIncident, random, strategieVainqueur);
+                return simulateur.call();
+            } finally {
+                semaphore.release();
+            }
+        });
     }
 
     private void verifierAbsenceDeConflit(Tournoi prochain) {
-        tournois.stream()
+        tousLesTournois.stream()
                 .filter(t -> t.getStatut() == Tournoi.Statut.EN_COURS)
                 .filter(prochain::estEnConflitAvec)
                 .findFirst()
@@ -98,32 +136,18 @@ public class GestionnaireTournois implements AutoCloseable {
     }
 
     @Override
-    public void close() {
-        synchronized (this) {
-            if (ferme) {
-                return;
-            }
-            ferme = true;
-            executor.shutdownNow();
-            for (Tournoi tournoi : tournois) {
-                if (tournoi.getStatut() == Tournoi.Statut.EN_COURS) {
-                    tournoi.terminerLesMatchsRestantsSurIncident();
-                }
-            }
+    public synchronized void close() {
+        if (ferme) {
+            return;
         }
-
-        boolean interrompu = false;
-        while (!executor.isTerminated()) {
-            try {
-                if (!executor.awaitTermination(1, TimeUnit.DAYS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                interrompu = true;
+        ferme = true;
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
                 executor.shutdownNow();
             }
-        }
-        if (interrompu) {
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }

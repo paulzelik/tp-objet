@@ -1,5 +1,6 @@
 package fr.imt.projet.jeux;
 
+import fr.imt.projet.exceptions.RegleMetierException;
 import java.util.Objects;
 
 public abstract class Jeux {
@@ -10,10 +11,10 @@ public abstract class Jeux {
     protected Jeux(String nom, int nombreManchesParMatch, int nombreJoueursParEquipe) {
         this.nom = nomValide(nom);
         if (nombreManchesParMatch <= 0) {
-            throw new IllegalArgumentException("Le nombre de manches doit être positif");
+            throw new RegleMetierException("Le nombre de manches doit être positif");
         }
         if (nombreJoueursParEquipe <= 0) {
-            throw new IllegalArgumentException("Le nombre de joueurs par équipe doit être positif");
+            throw new RegleMetierException("Le nombre de joueurs par équipe doit être positif");
         }
         this.nombreManchesParMatch = nombreManchesParMatch;
         this.nombreJoueursParEquipe = nombreJoueursParEquipe;
@@ -31,10 +32,31 @@ public abstract class Jeux {
         return nombreJoueursParEquipe;
     }
 
+    public int nbJoueursRequis() {
+        return getNombreJoueursParEquipe();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Jeux other)) return false;
+        return Objects.equals(nom, other.nom);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(nom);
+    }
+
+    @Override
+    public String toString() {
+        return nom;
+    }
+
     private static String nomValide(String nom) {
         Objects.requireNonNull(nom, "nom ne peut pas être null");
         if (nom.isBlank()) {
-            throw new IllegalArgumentException("nom ne peut pas être vide");
+            throw new RegleMetierException("nom ne peut pas être vide");
         }
         return nom;
     }

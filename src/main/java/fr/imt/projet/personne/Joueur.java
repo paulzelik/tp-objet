@@ -1,5 +1,8 @@
 package fr.imt.projet.personne;
 
+import fr.imt.projet.exceptions.RegleMetierException;
+import fr.imt.projet.jeux.Equipe;
+
 import java.util.Objects;
 
 public class Joueur extends Personne implements Classable {
@@ -9,6 +12,7 @@ public class Joueur extends Personne implements Classable {
     }
 
     private String equipe;
+    private Equipe equipeObjet;
     private Statut statut;
     private int victoiresDepuisArrivee;
     private int classement;
@@ -27,8 +31,24 @@ public class Joueur extends Personne implements Classable {
         this.statut = Objects.requireNonNull(statut, "statut ne peut pas être null");
     }
 
+    public Joueur(
+            long id,
+            String nom,
+            String prenom,
+            String pseudo,
+            String genre,
+            String telephone,
+            Statut statut) {
+        super(id, nom, prenom, pseudo, genre, telephone);
+        this.statut = Objects.requireNonNull(statut, "statut ne peut pas être null");
+    }
+
     public String getEquipe() {
         return equipe;
+    }
+
+    public Equipe getEquipeObjet() {
+        return equipeObjet;
     }
 
     public Statut getStatut() {
@@ -47,18 +67,31 @@ public class Joueur extends Personne implements Classable {
     @Override
     public void classer(int classement) {
         if (classement <= 0) {
-            throw new IllegalArgumentException("Le classement doit être positif");
+            throw new RegleMetierException("Le classement doit être positif");
         }
         this.classement = classement;
     }
 
-    public void changerEquipe(String equipe) {
-        this.equipe = nomValide(equipe, "equipe");
-        victoiresDepuisArrivee = 0;
+    public void changerEquipe(String nouvelleEquipe) {
+        this.equipe = nomValide(nouvelleEquipe, "equipe");
+        this.victoiresDepuisArrivee = 0;
+    }
+
+    public void assignerEquipe(Equipe nouvelleEquipe) {
+        this.equipeObjet = nouvelleEquipe;
+        this.equipe = nouvelleEquipe != null ? nouvelleEquipe.getNom() : null;
+        this.victoiresDepuisArrivee = 0;
+    }
+
+    public void quitterEquipe() {
+        this.equipeObjet = null;
+        this.equipe = null;
+        this.victoiresDepuisArrivee = 0;
     }
 
     public void enregistrerVictoireEquipe() {
-        if (statut == Statut.AMATEUR && ++victoiresDepuisArrivee >= 3) {
+        victoiresDepuisArrivee++;
+        if (statut == Statut.AMATEUR && victoiresDepuisArrivee >= 3) {
             statut = Statut.PRO;
         }
     }
@@ -66,7 +99,7 @@ public class Joueur extends Personne implements Classable {
     private static String nomValide(String valeur, String champ) {
         Objects.requireNonNull(valeur, champ + " ne peut pas être null");
         if (valeur.isBlank()) {
-            throw new IllegalArgumentException(champ + " ne peut pas être vide");
+            throw new RegleMetierException(champ + " ne peut pas être vide");
         }
         return valeur;
     }

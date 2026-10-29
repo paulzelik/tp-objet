@@ -1,5 +1,6 @@
 package fr.imt.projet.jeux;
 
+import fr.imt.projet.exceptions.RegleMetierException;
 import fr.imt.projet.personne.Joueur;
 import java.util.List;
 import java.util.Objects;
@@ -13,7 +14,7 @@ public class JeuxSolo extends Jeux {
         Objects.requireNonNull(joueursEquipe, "joueursEquipe ne peut pas être null");
         Objects.requireNonNull(joueur, "joueur ne peut pas être null");
         if (!joueursEquipe.contains(joueur)) {
-            throw new IllegalArgumentException("Le joueur sélectionné doit appartenir à l'équipe");
+            throw new RegleMetierException("Le joueur sélectionné doit appartenir à l'équipe");
         }
         return joueur;
     }

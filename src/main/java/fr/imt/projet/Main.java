@@ -3,12 +3,16 @@ package fr.imt.projet;
 import fr.imt.projet.jeux.Equipe;
 import fr.imt.projet.jeux.Jeux;
 import fr.imt.projet.jeux.JeuxSolo;
+import fr.imt.projet.jeux.factory.JeuFactory;
 import fr.imt.projet.personne.Arbitre;
 import fr.imt.projet.personne.Coach;
 import fr.imt.projet.personne.Joueur;
 import fr.imt.projet.rapports.RapportTournoi;
 import fr.imt.projet.tournoi.GestionnaireTournois;
 import fr.imt.projet.tournoi.Tournoi;
+import fr.imt.projet.tournoi.constructeur.TournoiBuilder;
+import fr.imt.projet.tournoi.strategie.FavoriseMieuxClasse;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,22 +20,29 @@ import java.util.concurrent.ExecutionException;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException, ExecutionException {
-        Jeux jeu = new JeuxSolo("Tennis", 3);
-        Tournoi tournoi = new Tournoi(
-                "Coupe IMT Arena", jeu, LocalDate.now(), new BigDecimal("500.00"), 2);
+        JeuFactory.enregistrerJeu("Tennis", () -> new JeuxSolo("Tennis", 3));
+        Jeux jeu = JeuFactory.creerJeu("Tennis");
+
+        TournoiBuilder builder = new TournoiBuilder()
+                .nom("Coupe IMT Arena")
+                .jeu(jeu)
+                .date(LocalDate.now())
+                .budget(new BigDecimal("500.00"))
+                .arenes(2);
 
         for (int i = 1; i <= 4; i++) {
-            tournoi.inscrireEquipe(creerEquipe(i));
+            builder.ajouterEquipe(creerEquipe(i));
         }
 
-
         Arbitre arbitre = new Arbitre(100, "Martin", "Alex", "arbitre", "X", "0600000000");
-        arbitre.qualifierPourJeu(jeu.getNom());
-        tournoi.inscrireArbitre(arbitre);
+        arbitre.qualifierPourJeu(jeu);
+        builder.ajouterArbitre(arbitre);
 
-        try (GestionnaireTournois gestionnaire = new GestionnaireTournois(50, 0.0, 42)) {
-            gestionnaire.ajouterTournoi(tournoi);
-            RapportTournoi rapport = gestionnaire.simulerProchainTournoi().get();
+        Tournoi tournoi = builder.build();
+
+        try (Arena arena = new Arena(new GestionnaireTournois(50, 0.0, 42, new FavoriseMieuxClasse()))) {
+            arena.planifierTournoi(tournoi);
+            RapportTournoi rapport = arena.simulerProchainTournoi().get();
 
             System.out.println("Tournoi : " + rapport.getNom());
             System.out.println("Jeu : " + rapport.getJeu());

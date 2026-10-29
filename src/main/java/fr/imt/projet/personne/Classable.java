@@ -5,6 +5,10 @@ public interface Classable {
 
     void classer(int classement);
 
+    default int getPoints() {
+        return getClassement();
+    }
+
     default boolean estClasse() {
         return getClassement() > 0;
     }

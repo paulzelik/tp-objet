@@ -1,5 +1,7 @@
 package fr.imt.projet.jeux;
 
+import fr.imt.projet.exceptions.RegleMetierException;
+
 public class JeuxEquipe extends Jeux {
     public JeuxEquipe(String nom, int nombreManchesParMatch, int nombreJoueursParEquipe) {
         super(nom, nombreManchesParMatch, validerNombreJoueurs(nombreJoueursParEquipe));
@@ -7,7 +9,7 @@ public class JeuxEquipe extends Jeux {
 
     private static int validerNombreJoueurs(int nombreJoueursParEquipe) {
         if (nombreJoueursParEquipe < 3 || nombreJoueursParEquipe > 5) {
-            throw new IllegalArgumentException("Un jeu en équipe doit aligner de 3 à 5 joueurs");
+            throw new RegleMetierException("Un jeu en équipe doit aligner de 3 à 5 joueurs");
         }
         return nombreJoueursParEquipe;
     }

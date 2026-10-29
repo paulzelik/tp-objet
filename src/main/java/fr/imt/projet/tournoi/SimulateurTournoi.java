@@ -2,8 +2,9 @@ package fr.imt.projet.tournoi;
 
 import fr.imt.projet.jeux.Equipe;
 import fr.imt.projet.jeux.Match;
-import fr.imt.projet.personne.Coach;
 import fr.imt.projet.rapports.RapportTournoi;
+import fr.imt.projet.tournoi.strategie.FavoriseMieuxClasse;
+import fr.imt.projet.tournoi.strategie.StrategieVainqueur;
 
 import java.util.List;
 import java.util.Objects;
@@ -15,8 +16,18 @@ public class SimulateurTournoi implements Callable<RapportTournoi> {
     private final long tempsParMatchMillis;
     private final double probabiliteIncident;
     private final Random random;
+    private final StrategieVainqueur strategieVainqueur;
 
     public SimulateurTournoi(Tournoi tournoi, long tempsParMatchMillis, double probabiliteIncident, long graine) {
+        this(tournoi, tempsParMatchMillis, probabiliteIncident, new Random(graine), new FavoriseMieuxClasse());
+    }
+
+    public SimulateurTournoi(
+            Tournoi tournoi,
+            long tempsParMatchMillis,
+            double probabiliteIncident,
+            Random random,
+            StrategieVainqueur strategieVainqueur) {
         this.tournoi = Objects.requireNonNull(tournoi, "tournoi ne peut pas être null");
         if (tempsParMatchMillis < 0) {
             throw new IllegalArgumentException("Le temps par match ne peut pas être négatif");
@@ -26,7 +37,8 @@ public class SimulateurTournoi implements Callable<RapportTournoi> {
         }
         this.tempsParMatchMillis = tempsParMatchMillis;
         this.probabiliteIncident = probabiliteIncident;
-        random = new Random(graine);
+        this.random = Objects.requireNonNull(random, "random ne peut pas être null");
+        this.strategieVainqueur = Objects.requireNonNull(strategieVainqueur, "strategieVainqueur ne peut pas être null");
     }
 
     @Override
@@ -38,6 +50,7 @@ public class SimulateurTournoi implements Callable<RapportTournoi> {
             Thread.sleep(dureeMillis);
         } catch (InterruptedException interruption) {
             tournoi.terminerLesMatchsRestantsSurIncident();
+            Thread.currentThread().interrupt();
             throw interruption;
         } catch (RuntimeException erreur) {
             tournoi.terminerLesMatchsRestantsSurIncident();
@@ -53,7 +66,8 @@ public class SimulateurTournoi implements Callable<RapportTournoi> {
                 if (random.nextDouble() < probabiliteIncident) {
                     tournoi.signalerIncidentTechnique(match);
                 } else {
-                    tournoi.declarerVainqueur(match, choisirVainqueur(match));
+                    Equipe gagnant = strategieVainqueur.designerVainqueur(match, random);
+                    tournoi.declarerVainqueur(match, gagnant);
                 }
             } catch (IllegalStateException e) {
                 if (tournoi.getStatut() == Tournoi.Statut.TERMINE) {
@@ -63,18 +77,5 @@ public class SimulateurTournoi implements Callable<RapportTournoi> {
             }
         }
         return tournoi.getRapport();
-    }
-
-    private Equipe choisirVainqueur(Match match) {
-        Equipe equipe1 = match.getEquipe1();
-        Equipe equipe2 = match.getEquipe2();
-        int classement1 = classement(equipe1.getCoach());
-        int classement2 = classement(equipe2.getCoach());
-        double avantageEquipe1 = 1.0 / (1.0 + Math.pow(10.0, (classement1 - classement2) / 400.0));
-        return random.nextDouble() < avantageEquipe1 ? equipe1 : equipe2;
-    }
-
-    private static int classement(Coach coach) {
-        return coach.estClasse() ? coach.getClassement() : 0;
     }
 }

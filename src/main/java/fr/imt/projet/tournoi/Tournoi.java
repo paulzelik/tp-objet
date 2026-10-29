@@ -1,5 +1,7 @@
 package fr.imt.projet.tournoi;
 
+import fr.imt.projet.exceptions.RegleMetierException;
+import fr.imt.projet.exceptions.TournoiInvalideException;
 import fr.imt.projet.jeux.Equipe;
 import fr.imt.projet.jeux.Jeux;
 import fr.imt.projet.jeux.Match;
@@ -7,16 +9,24 @@ import fr.imt.projet.personne.Arbitre;
 import fr.imt.projet.personne.Joueur;
 import fr.imt.projet.rapports.JpaRapportRepository;
 import fr.imt.projet.rapports.RapportTournoi;
+import fr.imt.projet.tournoi.observateur.MatchListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
-public class Tournoi {
+public class Tournoi implements Comparable<Tournoi> {
     public enum Statut {
         PLANIFIE,
         EN_COURS,
@@ -31,8 +41,9 @@ public class Tournoi {
     private final List<Equipe> equipes = new ArrayList<>();
     private final List<Arbitre> arbitres = new ArrayList<>();
     private final List<Match> matchs = new ArrayList<>();
-    private Statut statut = Statut.PLANIFIE;
-    private RapportTournoi rapport;
+    private final AtomicReference<Statut> statut = new AtomicReference<>(Statut.PLANIFIE);
+    private final AtomicReference<RapportTournoi> rapport = new AtomicReference<>(null);
+    private final List<MatchListener> listeners = new CopyOnWriteArrayList<>();
 
     public Tournoi(String nom, Jeux jeu, LocalDate date, BigDecimal budget, int nombreArenes) {
         this.nom = nomValide(nom);
@@ -40,12 +51,28 @@ public class Tournoi {
         this.date = Objects.requireNonNull(date, "date ne peut pas être null");
         this.budget = Objects.requireNonNull(budget, "budget ne peut pas être null");
         if (budget.signum() < 0) {
-            throw new IllegalArgumentException("Le budget ne peut pas être négatif");
+            throw new RegleMetierException("Le budget ne peut pas être négatif");
         }
         if (nombreArenes < 1 || nombreArenes > 4) {
-            throw new IllegalArgumentException("Un tournoi doit avoir de 1 à 4 arènes");
+            throw new RegleMetierException("Un tournoi doit avoir de 1 à 4 arènes");
         }
         this.nombreArenes = nombreArenes;
+    }
+
+    public void addMatchListener(MatchListener listener) {
+        if (listener != null) {
+            listeners.add(listener);
+            for (Match m : matchs) {
+                m.addMatchListener(listener);
+            }
+        }
+    }
+
+    public void removeMatchListener(MatchListener listener) {
+        listeners.remove(listener);
+        for (Match m : matchs) {
+            m.removeMatchListener(listener);
+        }
     }
 
     public String getNom() {
@@ -68,31 +95,31 @@ public class Tournoi {
         return nombreArenes;
     }
 
-    public synchronized Statut getStatut() {
-        return statut;
+    public Statut getStatut() {
+        return statut.get();
     }
 
     public synchronized List<Equipe> getEquipes() {
-        return List.copyOf(equipes);
+        return Collections.unmodifiableList(new ArrayList<>(equipes));
     }
 
     public synchronized List<Arbitre> getArbitres() {
-        return List.copyOf(arbitres);
+        return Collections.unmodifiableList(new ArrayList<>(arbitres));
     }
 
     public synchronized List<Match> getMatchs() {
-        return List.copyOf(matchs);
+        return Collections.unmodifiableList(new ArrayList<>(matchs));
     }
 
-    public synchronized RapportTournoi getRapport() {
-        return rapport;
+    public RapportTournoi getRapport() {
+        return rapport.get();
     }
 
     public synchronized void inscrireEquipe(Equipe equipe) {
         verifierPlanifie();
         Objects.requireNonNull(equipe, "equipe ne peut pas être null");
         if (equipes.contains(equipe)) {
-            throw new IllegalArgumentException("L'équipe est déjà inscrite");
+            throw new RegleMetierException("L'équipe est déjà inscrite");
         }
         equipes.add(equipe);
     }
@@ -101,60 +128,57 @@ public class Tournoi {
         verifierPlanifie();
         Objects.requireNonNull(arbitre, "arbitre ne peut pas être null");
         if (arbitres.contains(arbitre)) {
-            throw new IllegalArgumentException("L'arbitre est déjà inscrit");
+            throw new RegleMetierException("L'arbitre est déjà inscrit");
         }
         arbitres.add(arbitre);
     }
 
+    public synchronized void demarrer() {
+        verifierPlanifie();
+        verifierConditionsDemarrage();
+        genererMatchs();
+        statut.set(Statut.EN_COURS);
+    }
+
     public synchronized void demarrerMatch(Match match) {
         verifierEnCours();
-        verifierMatchInscrit(match);
-        long matchsEnCours = matchs.stream().filter(m -> m.getStatut() == Match.Statut.EN_COURS).count();
+        Objects.requireNonNull(match, "match ne peut pas être null");
+        if (!matchs.contains(match)) {
+            throw new RegleMetierException("Ce match n'appartient pas au tournoi");
+        }
+        long matchsEnCours = matchs.stream()
+                .filter(m -> m.getStatut() == Match.Statut.EN_COURS)
+                .count();
         if (matchsEnCours >= nombreArenes) {
-            throw new IllegalStateException("Toutes les arènes sont actuellement occupées");
+            throw new RegleMetierException("Toutes les arènes sont occupées");
         }
         match.demarrer();
     }
 
     public synchronized void declarerVainqueur(Match match, Equipe vainqueur) {
         verifierEnCours();
-        verifierMatchInscrit(match);
+        Objects.requireNonNull(match, "match ne peut pas être null");
+        if (!matchs.contains(match)) {
+            throw new RegleMetierException("Ce match n'appartient pas au tournoi");
+        }
         match.declarerVainqueur(vainqueur);
-        terminerSiTousLesMatchsSontTraites();
+        verifierClotureAutomatique();
     }
 
     public synchronized void signalerIncidentTechnique(Match match) {
         verifierEnCours();
-        verifierMatchInscrit(match);
-        match.signalerIncidentTechnique();
-        terminerSiTousLesMatchsSontTraites();
-    }
-
-    synchronized void demarrer() {
-        verifierPlanifie();
-        validerConditionsDeDemarrage();
-        genererMatchs();
-        statut = Statut.EN_COURS;
-    }
-
-    synchronized boolean estEnConflitAvec(Tournoi autre) {
-        for (Equipe equipe : equipes) {
-            for (Equipe equipeActive : autre.equipes) {
-                if (equipe == equipeActive
-                        || equipe.getCoach() == equipeActive.getCoach()
-                        || contientIdentite(equipe.getJoueurs(), equipeActive.getJoueurs())) {
-                    return true;
-                }
-            }
+        Objects.requireNonNull(match, "match ne peut pas être null");
+        if (!matchs.contains(match)) {
+            throw new RegleMetierException("Ce match n'appartient pas au tournoi");
         }
-        return false;
+        match.signalerIncidentTechnique();
+        verifierClotureAutomatique();
     }
 
-    synchronized void terminerLesMatchsRestantsSurIncident() {
-        if (statut == Statut.TERMINE) {
+    public synchronized void terminerLesMatchsRestantsSurIncident() {
+        if (statut.get() != Statut.EN_COURS) {
             return;
         }
-        verifierEnCours();
         for (Match match : matchs) {
             if (match.getStatut() == Match.Statut.PLANIFIE) {
                 match.demarrer();
@@ -163,137 +187,173 @@ public class Tournoi {
                 match.signalerIncidentTechnique();
             }
         }
-        terminerSiTousLesMatchsSontTraites();
+        cloturer();
     }
 
-    private void validerConditionsDeDemarrage() {
-        if (equipes.size() < 4) {
-            throw new IllegalStateException("Un tournoi doit compter au moins 4 équipes");
-        }
-        Map<Joueur, Boolean> joueursInscrits = new IdentityHashMap<>();
-        for (Equipe equipe : equipes) {
-            if (equipe.getCoach() == null) {
-                throw new IllegalStateException("Chaque équipe doit avoir un coach");
-            }
-            List<Joueur> joueurs = equipe.getJoueurs();
-            if (joueurs.size() != jeu.getNombreJoueursParEquipe()) {
-                throw new IllegalStateException(
-                        "Chaque équipe doit avoir exactement " + jeu.getNombreJoueursParEquipe() + " joueurs");
-            }
-            for (Joueur joueur : joueurs) {
-                Objects.requireNonNull(joueur, "Une équipe ne peut pas contenir de joueur null");
-                if (joueursInscrits.put(joueur, Boolean.TRUE) != null) {
-                    throw new IllegalStateException("Un joueur ne peut représenter qu'une seule équipe");
+    public synchronized boolean estEnConflitAvec(Tournoi autre) {
+        if (autre == null) return false;
+        for (Equipe e : equipes) {
+            if (autre.equipes.contains(e)) return true;
+            if (e.getCoach() != null) {
+                for (Equipe autreE : autre.equipes) {
+                    if (e.getCoach().equals(autreE.getCoach())) return true;
                 }
             }
-        }
-        if (arbitres.stream().noneMatch(a -> a.estQualifiePour(jeu.getNom()))) {
-            throw new IllegalStateException("Au moins un arbitre doit être qualifié pour le jeu");
-        }
-    }
-
-    private void genererMatchs() {
-        List<Arbitre> arbitresQualifies = arbitres.stream()
-                .filter(a -> a.estQualifiePour(jeu.getNom()))
-                .toList();
-        int indexArbitre = 0;
-        for (int i = 0; i < equipes.size(); i++) {
-            for (int j = i + 1; j < equipes.size(); j++) {
-                Arbitre arbitre = arbitresQualifies.get(indexArbitre++ % arbitresQualifies.size());
-                matchs.add(new Match(equipes.get(i), equipes.get(j), jeu, arbitre));
-            }
-        }
-    }
-
-    private void terminerSiTousLesMatchsSontTraites() {
-        if (matchs.stream().anyMatch(m -> m.getStatut() == Match.Statut.PLANIFIE
-                || m.getStatut() == Match.Statut.EN_COURS)) {
-            return;
-        }
-
-        Equipe equipeVainqueur = determinerVainqueur();
-        String vainqueur = equipeVainqueur == null ? null : equipeVainqueur.getNom();
-        int matchsJoues = (int) matchs.stream().filter(m -> m.getStatut() == Match.Statut.JOUE).count();
-        boolean reussi = matchsJoues * 10 >= matchs.size() * 7;
-        rapport = new RapportTournoi(nom, date, jeu.getNom(), matchs.size(), matchsJoues, vainqueur, reussi);
-        JpaRapportRepository.getInstance().sauvegarder(rapport);
-        statut = Statut.TERMINE;
-    }
-
-    private Equipe determinerVainqueur() {
-        int meilleurScore = equipes.stream().mapToInt(this::pointsDuTournoi).max().orElse(0);
-        List<Equipe> candidates = equipes.stream()
-                .filter(equipe -> pointsDuTournoi(equipe) == meilleurScore)
-                .toList();
-        if (candidates.size() == 1) {
-            return candidates.get(0);
-        }
-
-        Equipe vainqueurFaceAFace = null;
-        int meilleurScoreFaceAFace = -1;
-        boolean egaliteFaceAFace = false;
-        for (Equipe candidate : candidates) {
-            int scoreFaceAFace = candidates.stream()
-                    .filter(autre -> autre != candidate)
-                    .mapToInt(autre -> pointsFaceAFace(candidate, autre))
-                    .sum();
-            if (scoreFaceAFace > meilleurScoreFaceAFace) {
-                vainqueurFaceAFace = candidate;
-                meilleurScoreFaceAFace = scoreFaceAFace;
-                egaliteFaceAFace = false;
-            } else if (scoreFaceAFace == meilleurScoreFaceAFace) {
-                egaliteFaceAFace = true;
-            }
-        }
-        return egaliteFaceAFace ? null : vainqueurFaceAFace;
-    }
-
-    private int pointsDuTournoi(Equipe equipe) {
-        return (int) matchs.stream().filter(m -> m.getVainqueur() == equipe).count() * 3;
-    }
-
-    private int pointsFaceAFace(Equipe equipe, Equipe autre) {
-        return (int) matchs.stream()
-                .filter(m -> (m.getEquipe1() == equipe && m.getEquipe2() == autre)
-                        || (m.getEquipe1() == autre && m.getEquipe2() == equipe))
-                .filter(m -> m.getVainqueur() == equipe)
-                .count() * 3;
-    }
-
-    private void verifierMatchInscrit(Match match) {
-        Objects.requireNonNull(match, "match ne peut pas être null");
-        if (!matchs.contains(match)) {
-            throw new IllegalArgumentException("Le match n'appartient pas à ce tournoi");
-        }
-    }
-
-    private void verifierPlanifie() {
-        if (statut != Statut.PLANIFIE) {
-            throw new IllegalStateException("Le tournoi n'est plus planifié");
-        }
-    }
-
-    private void verifierEnCours() {
-        if (statut != Statut.EN_COURS) {
-            throw new IllegalStateException("Le tournoi n'est pas en cours");
-        }
-    }
-
-    private static boolean contientIdentite(List<Joueur> joueurs, List<Joueur> autresJoueurs) {
-        for (Joueur joueur : joueurs) {
-            for (Joueur autreJoueur : autresJoueurs) {
-                if (joueur == autreJoueur) {
-                    return true;
+            for (Joueur j : e.getJoueurs()) {
+                for (Equipe autreE : autre.equipes) {
+                    if (autreE.getJoueurs().contains(j)) return true;
                 }
             }
         }
         return false;
     }
 
+    public synchronized TreeSet<Equipe> getClassementEquipes() {
+        Comparator<Equipe> comparator = Comparator
+                .comparingInt(Equipe::getPoints).reversed()
+                .thenComparing(Equipe::getNom);
+        TreeSet<Equipe> classement = new TreeSet<>(comparator);
+        classement.addAll(equipes);
+        return classement;
+    }
+
+    public synchronized Map<Equipe, List<Match>> getMatchsGroupesParVainqueur() {
+        return matchs.stream()
+                .filter(m -> m.getStatut() == Match.Statut.JOUE && m.getVainqueur() != null)
+                .collect(Collectors.groupingBy(Match::getVainqueur));
+    }
+
+    @Override
+    public int compareTo(Tournoi autre) {
+        int dateCmp = this.date.compareTo(autre.date);
+        if (dateCmp != 0) return dateCmp;
+        return this.nom.compareTo(autre.nom);
+    }
+
+    private void verifierConditionsDemarrage() {
+        if (equipes.size() < 4) {
+            throw new TournoiInvalideException("Un tournoi nécessite au moins 4 équipes");
+        }
+        List<Arbitre> arbitresQualifies = arbitres.stream()
+                .filter(a -> a.estQualifiePour(jeu))
+                .toList();
+        if (arbitresQualifies.isEmpty()) {
+            throw new TournoiInvalideException("Aucun arbitre qualifié pour le jeu : " + jeu.getNom());
+        }
+        int joueursRequis = jeu.getNombreJoueursParEquipe();
+        Set<Joueur> tousLesJoueurs = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Equipe equipe : equipes) {
+            if (equipe.getCoach() == null) {
+                throw new TournoiInvalideException("Chaque équipe doit avoir un coach : " + equipe.getNom());
+            }
+            if (equipe.getJoueurs().size() != joueursRequis) {
+                throw new TournoiInvalideException("L'équipe " + equipe.getNom() + " doit avoir exactement "
+                        + joueursRequis + " joueurs");
+            }
+            for (Joueur joueur : equipe.getJoueurs()) {
+                if (!tousLesJoueurs.add(joueur)) {
+                    throw new TournoiInvalideException("Un joueur est présent dans plusieurs équipes : " + joueur.getNom());
+                }
+            }
+        }
+    }
+
+    private void genererMatchs() {
+        matchs.clear();
+        List<Arbitre> arbitresQualifies = arbitres.stream()
+                .filter(a -> a.estQualifiePour(jeu))
+                .toList();
+        int indexArbitre = 0;
+        for (int i = 0; i < equipes.size(); i++) {
+            for (int j = i + 1; j < equipes.size(); j++) {
+                Arbitre arbitre = arbitresQualifies.get(indexArbitre % arbitresQualifies.size());
+                indexArbitre++;
+                Match m = new Match(equipes.get(i), equipes.get(j), jeu, arbitre);
+                for (MatchListener listener : listeners) {
+                    m.addMatchListener(listener);
+                }
+                matchs.add(m);
+            }
+        }
+    }
+
+    private void verifierClotureAutomatique() {
+        boolean tousTermines = !matchs.isEmpty() && matchs.stream()
+                .allMatch(m -> m.getStatut() == Match.Statut.JOUE || m.getStatut() == Match.Statut.INCIDENT_TECHNIQUE);
+        if (tousTermines) {
+            cloturer();
+        }
+    }
+
+    private void cloturer() {
+        statut.set(Statut.TERMINE);
+        int matchsPlanifies = matchs.size();
+        long matchsJoues = matchs.stream().filter(m -> m.getStatut() == Match.Statut.JOUE).count();
+        boolean reussi = matchsPlanifies > 0 && ((double) matchsJoues / matchsPlanifies) >= 0.70;
+
+        Equipe vainqueur = determinerVainqueurTournoi();
+        String nomVainqueur = vainqueur == null ? null : vainqueur.getNom();
+
+        RapportTournoi nouveauRapport = new RapportTournoi(
+                nom, date, jeu.getNom(), matchsPlanifies, (int) matchsJoues, nomVainqueur, reussi);
+        rapport.set(nouveauRapport);
+        JpaRapportRepository.getInstance().sauvegarder(nouveauRapport);
+    }
+
+    private Equipe determinerVainqueurTournoi() {
+        Map<Equipe, Integer> pointsDuTournoi = new IdentityHashMap<>();
+        for (Equipe e : equipes) {
+            pointsDuTournoi.put(e, 0);
+        }
+        for (Match m : matchs) {
+            if (m.getStatut() == Match.Statut.JOUE && m.getVainqueur() != null) {
+                pointsDuTournoi.put(m.getVainqueur(), pointsDuTournoi.get(m.getVainqueur()) + 3);
+            }
+        }
+        int maxPoints = pointsDuTournoi.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        List<Equipe> exAequo = pointsDuTournoi.entrySet().stream()
+                .filter(entry -> entry.getValue() == maxPoints)
+                .map(Map.Entry::getKey)
+                .toList();
+
+        if (exAequo.isEmpty()) return null;
+        if (exAequo.size() == 1) return exAequo.get(0);
+
+        Map<Equipe, Integer> pointsDirects = new IdentityHashMap<>();
+        for (Equipe e : exAequo) pointsDirects.put(e, 0);
+
+        for (Match m : matchs) {
+            if (m.getStatut() == Match.Statut.JOUE && m.getVainqueur() != null) {
+                if (exAequo.contains(m.getEquipe1()) && exAequo.contains(m.getEquipe2())) {
+                    pointsDirects.put(m.getVainqueur(), pointsDirects.get(m.getVainqueur()) + 3);
+                }
+            }
+        }
+        int maxDirects = pointsDirects.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        List<Equipe> vainqueursFinaux = pointsDirects.entrySet().stream()
+                .filter(entry -> entry.getValue() == maxDirects)
+                .map(Map.Entry::getKey)
+                .toList();
+
+        return vainqueursFinaux.size() == 1 ? vainqueursFinaux.get(0) : null;
+    }
+
+    private void verifierPlanifie() {
+        if (statut.get() != Statut.PLANIFIE) {
+            throw new RegleMetierException("Le tournoi n'est plus en phase de planification");
+        }
+    }
+
+    private void verifierEnCours() {
+        if (statut.get() != Statut.EN_COURS) {
+            throw new RegleMetierException("Le tournoi doit être en cours");
+        }
+    }
+
     private static String nomValide(String nom) {
         Objects.requireNonNull(nom, "nom ne peut pas être null");
         if (nom.isBlank()) {
-            throw new IllegalArgumentException("nom ne peut pas être vide");
+            throw new RegleMetierException("nom ne peut pas être vide");
         }
         return nom;
     }

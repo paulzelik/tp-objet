@@ -1,5 +1,6 @@
 package fr.imt.projet.personne;
 
+import fr.imt.projet.exceptions.RegleMetierException;
 import java.util.Objects;
 
 public class Coach extends Personne implements Classable {
@@ -35,7 +36,7 @@ public class Coach extends Personne implements Classable {
     @Override
     public void classer(int classement) {
         if (classement <= 0) {
-            throw new IllegalArgumentException("Le classement doit être positif");
+            throw new RegleMetierException("Le classement doit être positif");
         }
         this.classement = classement;
     }
@@ -48,11 +49,11 @@ public class Coach extends Personne implements Classable {
         totalVictoiresEnCarriere++;
     }
 
-    private static String nomValide(String equipe) {
-        Objects.requireNonNull(equipe, "equipe ne peut pas être null");
-        if (equipe.isBlank()) {
-            throw new IllegalArgumentException("equipe ne peut pas être vide");
+    private static String nomValide(String valeur) {
+        Objects.requireNonNull(valeur, "equipe ne peut pas être null");
+        if (valeur.isBlank()) {
+            throw new RegleMetierException("equipe ne peut pas être vide");
         }
-        return equipe;
+        return valeur;
     }
 }
