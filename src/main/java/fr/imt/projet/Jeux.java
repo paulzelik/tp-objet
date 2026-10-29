@@ -2,6 +2,11 @@ package fr.imt.projet;
 
 import java.util.Objects;
 
+/**
+ * Un jeu : un nom, un nombre de manches par match et un nombre de joueurs alignés par équipe.
+ * Classe abstraite : on crée toujours un type de jeu précis ({@link JeuxSolo}, {@link JeuxEquipe}).
+ * Un nouveau type de jeu s'ajoute par une nouvelle sous-classe, sans modifier l'existant.
+ */
 public abstract class Jeux {
     private final String nom;
     private final int nombreManchesParMatch;
@@ -29,6 +34,11 @@ public abstract class Jeux {
 
     public int getNombreJoueursParEquipe() {
         return nombreJoueursParEquipe;
+    }
+
+    @Override
+    public String toString() {
+        return nom + " (" + nombreJoueursParEquipe + " joueur(s) par équipe, " + nombreManchesParMatch + " manche(s))";
     }
 
     private static String nomValide(String nom) {

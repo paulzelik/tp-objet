@@ -4,66 +4,129 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public class Equipe {
-    private String nom;
-    private Coach coach;
-    private List<Joueur> joueurs;
-    private int nombreDePoints;
+/**
+ * Équipe : un nom, un coach, des joueurs et un total de points (3 par victoire, pas de nul).
+ * <p>
+ * L'équipe garantit les règles de composition :
+ * <ul>
+ *     <li>un coach obligatoire, qui ne dirige qu'une équipe ;</li>
+ *     <li>un joueur n'est que dans une équipe à la fois ;</li>
+ *     <li>la composition est gelée pendant un tournoi en cours ;</li>
+ *     <li>les points ne s'obtiennent que par une victoire en match (pas de setter public).</li>
+ * </ul>
+ * Effectif dans une {@link ArrayList} : petite taille, ordre d'inscription, accès par position.
+ * L'équipe est {@link Classable} : son rang au classement général est mis à jour à chaque fin de tournoi.
+ */
+public final class Equipe implements Classable {
+    public static final int POINTS_PAR_VICTOIRE = 3;
 
-    public Equipe(String nom, Coach coach, List<Joueur> joueurs, int nombreDePoints) {
-        setNom(nom);
-        setCoach(coach);
-        setJoueurs(joueurs);
-        setNombreDePoints(nombreDePoints);
+    private final String nom;
+    private final List<Joueur> joueurs = new ArrayList<>();
+    private Coach coach;
+    private int nombreDePoints;
+    private int classement;
+    private Tournoi tournoiEnCours;
+
+    public Equipe(String nom, Coach coach, Joueur... joueurs) {
+        this.nom = Personne.texteValide(nom, "nom");
+        Objects.requireNonNull(coach, "coach ne peut pas être null");
+        coach.prendreEnCharge(this);
+        this.coach = coach;
+        for (Joueur joueur : joueurs) {
+            recruter(joueur);
+        }
     }
 
     public String getNom() {
         return nom;
     }
 
-    public void setNom(String nom) {
-        Objects.requireNonNull(nom, "nom ne peut pas être null");
-        if (nom.isBlank()) {
-            throw new IllegalArgumentException("nom ne peut pas être vide");
-        }
-        this.nom = nom;
-    }
-
-    public Coach getCoach() {
+    public synchronized Coach getCoach() {
         return coach;
     }
 
-    public void setCoach(Coach coach) {
-        this.coach = Objects.requireNonNull(coach, "coach ne peut pas être null");
+    /** Copie non modifiable de l'effectif. */
+    public synchronized List<Joueur> getJoueurs() {
+        return List.copyOf(joueurs);
     }
 
-    public List<Joueur> getJoueurs() {
-        return new ArrayList<>(joueurs);
-    }
-
-    public void setJoueurs(List<Joueur> joueurs) {
-        List<Joueur> copie = new ArrayList<>(Objects.requireNonNull(joueurs, "joueurs ne peut pas être null"));
-        for (Joueur joueur : copie) {
-            Objects.requireNonNull(joueur, "un joueur ne peut pas être null");
-        }
-        this.joueurs = copie;
-    }
-
-    public int getNombreDePoints() {
+    public synchronized int getNombreDePoints() {
         return nombreDePoints;
     }
 
-    public void setNombreDePoints(int nombreDePoints) {
-        if (nombreDePoints < 0) {
-            throw new IllegalArgumentException("Le nombre de points ne peut pas être négatif");
-        }
-        this.nombreDePoints = nombreDePoints;
+    public synchronized boolean estEngagee() {
+        return tournoiEnCours != null;
     }
 
-    public void ajouterPoints(int points) {
-        if (points < 0) {
-            throw new IllegalArgumentException("Le nombre de points à ajouter ne peut pas être négatif");
+    public synchronized void recruter(Joueur joueur) {
+        Objects.requireNonNull(joueur, "un joueur ne peut pas être null");
+        verifierModifiable();
+        joueur.rejoindre(this);
+        joueurs.add(joueur);
+    }
+
+    public synchronized void liberer(Joueur joueur) {
+        verifierModifiable();
+        if (!joueurs.remove(joueur)) {
+            throw new IllegalArgumentException(joueur.getPseudo() + " ne fait pas partie de « " + nom + " »");
         }
-        nombreDePoints = Math.addExact(nombreDePoints, points);
+        joueur.quitter(this);
+    }
+
+    public synchronized void changerCoach(Coach nouveauCoach) {
+        Objects.requireNonNull(nouveauCoach, "coach ne peut pas être null");
+        verifierModifiable();
+        if (nouveauCoach != coach) {
+            nouveauCoach.prendreEnCharge(this);
+            coach.quitter(this);
+            coach = nouveauCoach;
+        }
+    }
+
+    @Override
+    public synchronized int getClassement() {
+        return classement;
+    }
+
+    @Override
+    public synchronized void classer(int classement) {
+        if (classement <= 0) {
+            throw new IllegalArgumentException("Le classement doit être positif");
+        }
+        this.classement = classement;
+    }
+
+    /** Victoire en match : +3 points, une victoire de plus pour le coach et pour chaque joueur. */
+    synchronized void enregistrerVictoire() {
+        nombreDePoints = Math.addExact(nombreDePoints, POINTS_PAR_VICTOIRE);
+        coach.enregistrerVictoireEquipe();
+        for (Joueur joueur : joueurs) {
+            joueur.enregistrerVictoireEquipe();
+        }
+    }
+
+    synchronized void engager(Tournoi tournoi) {
+        if (tournoiEnCours != null) {
+            throw new IllegalStateException("« " + nom + " » dispute déjà « " + tournoiEnCours.getNom() + " »");
+        }
+        tournoiEnCours = tournoi;
+    }
+
+    synchronized void desengager(Tournoi tournoi) {
+        if (tournoiEnCours == tournoi) {
+            tournoiEnCours = null;
+        }
+    }
+
+    private void verifierModifiable() {
+        if (tournoiEnCours != null) {
+            throw new IllegalStateException("Composition de « " + nom + " » gelée : tournoi « "
+                    + tournoiEnCours.getNom() + " » en cours");
+        }
+    }
+
+    @Override
+    public String toString() {
+        return nom;
     }
 }

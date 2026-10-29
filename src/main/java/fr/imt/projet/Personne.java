@@ -1,67 +1,65 @@
 package fr.imt.projet;
 
+import java.util.Objects;
+
+/**
+ * Identité commune aux joueurs, coachs et arbitres.
+ * <p>
+ * Les attributs d'identité sont {@code final} et sans setter : une fois créée, une personne
+ * ne peut pas être modifiée depuis l'extérieur (encapsulation). Seuls les états propres à
+ * chaque rôle (équipe, statut, compteurs) évoluent, et uniquement via les objets du modèle.
+ */
 public abstract class Personne {
-    private long id;
-    private String nom;
-    private String prenom;
-    private String pseudo;
-    private String genre;
-    private String telephone;
+    private final long id;
+    private final String nom;
+    private final String prenom;
+    private final String pseudo;
+    private final String genre;
+    private final String telephone;
 
     protected Personne(long id, String nom, String prenom, String pseudo, String genre, String telephone) {
         this.id = id;
-        this.nom = nom;
-        this.prenom = prenom;
-        this.pseudo = pseudo;
-        this.genre = genre;
-        this.telephone = telephone;
+        this.nom = texteValide(nom, "nom");
+        this.prenom = texteValide(prenom, "prenom");
+        this.pseudo = texteValide(pseudo, "pseudo");
+        this.genre = texteValide(genre, "genre");
+        this.telephone = texteValide(telephone, "telephone");
     }
 
     public long getId() {
         return id;
     }
 
-    public void setId(long id) {
-        this.id = id;
-    }
-
     public String getNom() {
         return nom;
-    }
-
-    public void setNom(String nom) {
-        this.nom = nom;
     }
 
     public String getPrenom() {
         return prenom;
     }
 
-    public void setPrenom(String prenom) {
-        this.prenom = prenom;
-    }
-
     public String getPseudo() {
         return pseudo;
-    }
-
-    public void setPseudo(String pseudo) {
-        this.pseudo = pseudo;
     }
 
     public String getGenre() {
         return genre;
     }
 
-    public void setGenre(String genre) {
-        this.genre = genre;
-    }
-
     public String getTelephone() {
         return telephone;
     }
 
-    public void setTelephone(String telephone) {
-        this.telephone = telephone;
+    @Override
+    public String toString() {
+        return prenom + " « " + pseudo + " » " + nom;
+    }
+
+    static String texteValide(String valeur, String champ) {
+        Objects.requireNonNull(valeur, champ + " ne peut pas être null");
+        if (valeur.isBlank()) {
+            throw new IllegalArgumentException(champ + " ne peut pas être vide");
+        }
+        return valeur;
     }
 }

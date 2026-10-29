@@ -3,9 +3,12 @@ package fr.imt.projet;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -38,18 +41,22 @@ class JeuxTest {
         assertThrows(IllegalArgumentException.class, () -> new JeuxEquipe("Basketball", 0, 3));
     }
 
-    @Test
-    void rejectsTeamSizeOutsideAllowedRange() {
-        assertThrows(IllegalArgumentException.class, () -> new JeuxEquipe("Basketball", 4, 2));
-        assertThrows(IllegalArgumentException.class, () -> new JeuxEquipe("Basketball", 4, 6));
+    @ParameterizedTest(name = "un jeu en équipe accepte {0} joueurs")
+    @ValueSource(ints = {3, 4, 5})
+    void teamGameAcceptsThreeToFivePlayers(int joueurs) {
+        assertEquals(joueurs, new JeuxEquipe("Basketball", 4, joueurs).getNombreJoueursParEquipe());
+    }
+
+    @ParameterizedTest(name = "un jeu en équipe refuse {0} joueurs")
+    @ValueSource(ints = {0, 1, 2, 6, 10})
+    void rejectsTeamSizeOutsideAllowedRange(int joueurs) {
+        assertThrows(IllegalArgumentException.class, () -> new JeuxEquipe("Basketball", 4, joueurs));
     }
 
     @Test
     void soloGameSelectsOnlyAPlayerFromTheTeam() {
-        Joueur joueur = new Joueur(
-                1, "Nom", "Prenom", "pseudo", "genre", "telephone", "Equipe", Joueur.Statut.AMATEUR);
-        Joueur autreJoueur = new Joueur(
-                2, "Autre", "Prenom", "pseudo2", "genre", "telephone", "Equipe", Joueur.Statut.AMATEUR);
+        Joueur joueur = new Joueur(1, "Nom", "Prenom", "pseudo", "genre", "telephone", Joueur.Statut.AMATEUR);
+        Joueur autreJoueur = new Joueur(2, "Autre", "Prenom", "pseudo2", "genre", "telephone", Joueur.Statut.AMATEUR);
 
         assertEquals(joueur, new JeuxSolo("Tennis", 3).selectionnerJoueur(List.of(joueur, autreJoueur), joueur));
         assertThrows(
@@ -66,10 +73,29 @@ class JeuxTest {
     }
 
     @Test
+    void factoryCreatesAGameFromItsNameIgnoringCase() {
+        FabriqueJeux fabrique = FabriqueJeux.avecCatalogueParDefaut();
+
+        Jeux jeu = fabrique.creer("rocket league");
+
+        assertEquals("Rocket League", jeu.getNom());
+        assertEquals(3, jeu.getNombreJoueursParEquipe());
+        assertSame(jeu, fabrique.creer("Rocket League"), "une seule instance par nom");
+        assertThrows(IllegalArgumentException.class, () -> fabrique.creer("Minecraft"));
+    }
+
+    @Test
+    void factoryAcceptsANewGameTypeAtRuntime() {
+        FabriqueJeux fabrique = new FabriqueJeux().enregistrer("Duo", () -> new Jeux("Duo", 1, 2) { });
+
+        assertEquals(2, fabrique.creer("duo").getNombreJoueursParEquipe());
+        assertTrue(fabrique.getJeuxDisponibles().contains("Duo"));
+    }
+
+    @Test
     void playerAndCoachShareTheClassableCapability() {
-        Classable joueur = new Joueur(
-                1, "Nom", "Prenom", "pseudo", "genre", "telephone", "Equipe", Joueur.Statut.AMATEUR);
-        Classable coach = new Coach(2, "Coach", "Prenom", "pseudo", "genre", "telephone", "Equipe");
+        Classable joueur = new Joueur(1, "Nom", "Prenom", "pseudo", "genre", "telephone", Joueur.Statut.AMATEUR);
+        Classable coach = new Coach(2, "Coach", "Prenom", "pseudo", "genre", "telephone");
 
         assertFalse(joueur.estClasse());
         joueur.classer(1);
@@ -82,11 +108,11 @@ class JeuxTest {
 
     @Test
     void refereeExposesQualificationAsACapability() {
-        QualifiablePourJeu arbitre =
-                new Arbitre(1, "Nom", "Prenom", "pseudo", "genre", "telephone");
+        QualifiablePourJeu arbitre = new Arbitre(1, "Nom", "Prenom", "pseudo", "genre", "telephone");
 
         assertFalse(arbitre.estQualifiePour("Tennis"));
         arbitre.qualifierPourJeu("Tennis");
         assertTrue(arbitre.estQualifiePour("Tennis"));
+        assertThrows(UnsupportedOperationException.class, () -> arbitre.getJeuxQualifies().clear());
     }
 }

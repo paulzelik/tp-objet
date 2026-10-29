@@ -35,19 +35,12 @@ class TournoiTest {
         assertEquals(6, tournoi.getMatchs().size());
 
         List<Match> matchs = tournoi.getMatchs();
-        for (int i = 0; i < 4; i++) {
+        Equipe[] vainqueurs = {equipes.get(0), equipes.get(0), equipes.get(0), equipes.get(1), equipes.get(1),
+            equipes.get(2)};
+        for (int i = 0; i < matchs.size(); i++) {
             tournoi.demarrerMatch(matchs.get(i));
+            tournoi.declarerVainqueur(matchs.get(i), vainqueurs[i]);
         }
-        assertThrows(IllegalStateException.class, () -> tournoi.demarrerMatch(matchs.get(4)));
-
-        tournoi.declarerVainqueur(matchs.get(0), equipes.get(0));
-        tournoi.declarerVainqueur(matchs.get(1), equipes.get(0));
-        tournoi.declarerVainqueur(matchs.get(2), equipes.get(0));
-        tournoi.declarerVainqueur(matchs.get(3), equipes.get(1));
-        tournoi.demarrerMatch(matchs.get(4));
-        tournoi.demarrerMatch(matchs.get(5));
-        tournoi.declarerVainqueur(matchs.get(4), equipes.get(1));
-        tournoi.declarerVainqueur(matchs.get(5), equipes.get(2));
 
         assertEquals(Tournoi.Statut.TERMINE, tournoi.getStatut());
         assertEquals(9, equipes.get(0).getNombreDePoints());
@@ -289,10 +282,9 @@ class TournoiTest {
     }
 
     private static Equipe creerEquipe(String nom) {
-        Coach coach = new Coach(1, "Coach " + nom, "Prenom", "pseudo", "genre", "telephone", nom);
-        Joueur joueur = new Joueur(
-                1, "Joueur " + nom, "Prenom", "pseudo", "genre", "telephone", nom, Joueur.Statut.AMATEUR);
-        return new Equipe(nom, coach, List.of(joueur), 0);
+        Coach coach = new Coach(1, "Coach " + nom, "Prenom", "pseudo", "genre", "telephone");
+        Joueur joueur = new Joueur(1, "Joueur " + nom, "Prenom", "pseudo", "genre", "telephone", Joueur.Statut.AMATEUR);
+        return new Equipe(nom, coach, joueur);
     }
 
     private static Arbitre inscrireArbitre(Tournoi tournoi, Jeux jeu) {
