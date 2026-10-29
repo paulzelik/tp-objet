@@ -1,7 +1,8 @@
 # IMT Arena — modèle de tournois
 
 Projet Java qui modélise les personnes, les équipes, les matchs et les tournois d'une compétition.
-Les règles métier sont portées par les classes du package `fr.imt.projet`.
+Les règles métier sont organisées dans les packages `fr.imt.projet.personne`,
+`fr.imt.projet.jeux` et `fr.imt.projet.tournoi`.
 
 > Le modèle métier est implémenté, mais `Main` n'exécute pas encore de scénario de tournoi :
 > pour le moment, l'application affiche uniquement `Bonjour, Maven !`.
@@ -21,13 +22,14 @@ mvn package
 java -cp target/classes fr.imt.projet.Main
 ```
 
-Les tests utilisent JUnit 5. Ils couvrent notamment les règles des jeux et des matchs, le calendrier des
-tournois, les conditions de démarrage, les arènes, les incidents techniques et le rapport final.
+Les tests utilisent JUnit 5 et couvrent la validation des jeux, la persistance des rapports et le cycle complet
+d'un tournoi.
 
 ## Organisation du code
 
-Les sources Java se trouvent dans `src/main/java/fr/imt/projet` et les tests dans
-`src/test/java/fr/imt/projet`.
+Les sources Java se trouvent dans `src/main/java/fr/imt/projet`. Le point d'entrée `Main` reste dans
+`fr.imt.projet`; les modèles de personnes/capacités sont sous `personne`, les jeux/équipes/matchs sous
+`jeux`, et les tournois/simulateurs/gestionnaires/rapports persistés sous `tournoi`.
 
 ### Personnes et capacités
 
@@ -44,7 +46,7 @@ Les sources Java se trouvent dans `src/main/java/fr/imt/projet` et les tests dan
 
 ### Jeux
 
-`Jeux` décrit un jeu avec son nom, son nombre de manches et son nombre de joueurs par équipe.
+`fr.imt.projet.jeux.Jeux` décrit un jeu avec son nom, son nombre de manches et son nombre de joueurs par équipe.
 
 - `JeuxEquipe` représente un jeu par équipe et accepte de 3 à 5 joueurs par équipe.
 - `JeuxSolo` représente un jeu individuel (un joueur par équipe) et vérifie que le joueur sélectionné
@@ -53,11 +55,11 @@ Les sources Java se trouvent dans `src/main/java/fr/imt/projet` et les tests dan
 
 ### Équipes et matchs
 
-`Equipe` regroupe un nom, un coach, un tableau de joueurs et un total de points. Les noms ne peuvent pas
+`fr.imt.projet.jeux.Equipe` regroupe un nom, un coach, un tableau de joueurs et un total de points. Les noms ne peuvent pas
 être nuls ou vides, les joueurs sont copiés à l'entrée et à la sortie, et les points ne peuvent pas être
 négatifs.
 
-`Match` oppose deux équipes distinctes pour un jeu, sous la responsabilité d'un arbitre. Son statut suit
+`fr.imt.projet.jeux.Match` oppose deux équipes distinctes pour un jeu, sous la responsabilité d'un arbitre. Son statut suit
 le cycle `PLANIFIE` → `EN_COURS` → `JOUE` ou `INCIDENT_TECHNIQUE`.
 
 - Le match ne peut démarrer qu'une fois ; le démarrage vérifie la qualification de l'arbitre.
@@ -67,7 +69,7 @@ le cycle `PLANIFIE` → `EN_COURS` → `JOUE` ou `INCIDENT_TECHNIQUE`.
 
 ### Tournois
 
-`Tournoi` contient un nom, un jeu, une date, un budget (en `BigDecimal`), de 1 à 4 arènes, les équipes
+`fr.imt.projet.tournoi.Tournoi` contient un nom, un jeu, une date, un budget (en `BigDecimal`), de 1 à 4 arènes, les équipes
 inscrites, les arbitres, les matchs et le statut `PLANIFIE`, `EN_COURS` ou `TERMINE`.
 
 Les inscriptions sont possibles tant que le tournoi est planifié. Pour le démarrer, il faut :
@@ -83,8 +85,14 @@ Au démarrage, chaque paire d'équipes reçoit exactement un match. Le nombre de
 Les matchs sont ensuite démarrés explicitement avec `demarrerMatch`. Le nombre de matchs simultanément en cours
 ne peut dépasser le nombre d'arènes. Chaque match doit être déclaré joué avec un vainqueur, ou terminé avec un
 incident technique. Quand tous les matchs sont traités, le tournoi se termine automatiquement et produit un
-`RapportTournoi` avec le nom du tournoi, le jeu, le nombre de matchs joués, le vainqueur et le résultat de
-réussite. Le tournoi est réussi si au moins 70 % des matchs ont été joués.
+rapport avec le nom et la date du tournoi, le jeu, les nombres de matchs planifiés et joués, le vainqueur et le
+résultat de réussite. Le tournoi est réussi si au moins 70 % des matchs ont été joués.
+
+Chaque rapport est automatiquement persisté en fin de tournoi. Seuls les rapports utilisent JPA : les objets
+métier restent en mémoire. H2 enregistre les données dans `./data/arena` (le dossier est créé par H2 et ignoré
+par Git). `JpaRapportRepository.getInstance().trouverTous()` retourne tous les rapports et
+`trouverParJeu("Tennis")` filtre par jeu sans tenir compte de la casse. Les tests peuvent créer un dépôt isolé
+en mémoire avec `JpaRapportRepository.enMemoire(nomBase)`.
 
 Le vainqueur est l'équipe qui totalise le plus de points gagnés dans ce tournoi. En cas d'égalité, les résultats
 des confrontations directes entre les équipes à égalité servent au départage. Si l'égalité persiste, le rapport
@@ -110,6 +118,9 @@ Le gestionnaire accepte un temps par match, une probabilité d'incident et une g
 simulations reproductibles :
 
 ```java
+import fr.imt.projet.tournoi.GestionnaireTournois;
+import fr.imt.projet.tournoi.RapportTournoi;
+import fr.imt.projet.tournoi.Tournoi;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -139,7 +150,7 @@ techniques afin de produire le rapport final.
 
 ## Tests
 
-Les tests JUnit se trouvent dans `src/test/java/fr/imt/projet`. Pour ne lancer qu'une classe de tests :
+Les trois tests JUnit se trouvent dans `src/test/java/fr/imt/projet`. Pour ne lancer qu'une classe de tests :
 
 ```powershell
 mvn -Dtest=TournoiTest test
